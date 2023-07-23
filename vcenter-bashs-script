@@ -1,0 +1,104 @@
+#Color for output
+RED='\033[0;31m'
+GREEN='\e\032[0;32m'
+NC='\033[0m' # No Color
+
+#Password Capture
+echo -e "Enter SSO Admin Password"
+read -s password
+######Password Validation
+deploymenttype=`cat /etc/vmware/deployment.node.type`
+#echo $deploymenttype
+if [ $deploymenttype == management ]
+then
+echo -e "\n $RED External vCenter detected $NC"
+echo -e "$RED Depricated Topology $NC \n\n"
+sleep 2
+else
+vmdirdstate=" /usr/lib/vmware-vmafd/bin/dir-cli state get --login administrator --password $password"
+$vmdirdstate > /dev/null
+if [ $? == 0 ]
+then
+echo -e "\n\n $GREEN Embedded vCenter detected... $NC \n\n"
+sleep 2
+else
+echo "Invalid password or vmdird is not functioning"
+exit
+fi
+fi
+
+######vCenter Version Test
+vpxd -vl |awk '{print"Version and Build:\t "$0}'
+uptime| awk '{print "Uptime:\t\t\t" $0}'
+
+vpxd -vl |awk '{print"Version and Build:\t "$0}'
+hostname -f | awk '{print "Hostname:\t\t " $1}'
+##############NIC and IP Address Test
+#IP Address Check
+ip=`ifconfig | grep eth -A 1 | grep inet | awk '{print $2}' | sed 's/addr://'`
+echo -e "IP Address: \t\t $ip"
+##############End of NIC and IP Address Test
+######PNID, PSC, Machine ID and SSO Domain Name Check
+/usr/lib/vmware-vmafd/bin/vmafd-cli get-pnid --server-name localhost |awk '{print "PNID:\t\t\t " $1}'
+/usr/lib/vmware-vmafd/bin/vmafd-cli get-ls-location --server-name localhost |awk '{print "PSC:\t\t\t " $1}'
+/usr/lib/vmware-vmafd/bin/vmafd-cli get-machine-id --server-name localhost |awk '{print "MachineID:\t\t " $1}'
+scahostid=`cat /etc/vmware/install-defaults/sca.hostid`
+echo -e "sca.hostid:\t\t $scahostid"
+/usr/lib/vmware-vmafd/bin/vmafd-cli get-domain-name --server-name localhost | awk '{print "SSO Domain Name:\t "$0}'
+
+######Root Password expiry status
+rootpwd=`chage -l root | grep "Password expires" | awk '{print $4}' `
+echo -e "Root Password Expiry: \t $rootpwd"
+######End of Root Password expiry status
+
+#######VCHA Test
+vcha=`cat /storage/vmware-vmon/defaultStartProfile`
+if [ $vcha == ALL ]
+then
+echo -e "VCHA Status: \t\t Profile is $vcha. No HACore Profile Found, however $RED confirm once $NC"
+elif [ $vcha == HACORE ]
+then
+echo -e "VCHA Status: \t\t Profile is $vcha. This VC looks to be a VCHA Node, please confirm once"
+else
+echo -e "VCHA Status: \t\t Profile is $vcha. Unable to determine. Please chack the configurationmanually"
+fi
+#######End of VCHA Test
+
+echo -e "\n\n/etc/hosts file entries:"
+cat /etc/hosts | grep -v "# "
+
+echo -e "\n\n/etc/resolv.conf file entries:"
+cat /etc/resolv.conf | grep -v "#"
+
+######Service Status Check
+runningservices=`service-control --status --all | grep -i running -A 1`
+echo -e "\n\n$GREEN Running Services:\n$NC $runningservices\n"
+stoppedservices=`service-control --status --all | grep -i stopped -A 1`
+echo -e "$RED Stopped Services: $NC \n $stoppedservices $NC"
+######End of Service Status Check
+
+if [ $deploymenttype == embedded ]
+then
+elm='/usr/lib/vmware-vmdir/bin/vdcrepadmin -f showservers -h localhost -u administrator -w '$password''
+echo ""
+echo ""
+echo -e "$RED The following Node/s are part of this SSO Domain $NC"
+$elm
+echo -e "\n"
+else
+echo "This is an external VC"
+echo -e "\n"
+fi
+
+#Certificate validation (VECS Store)
+for i in $(/usr/lib/vmware-vmafd/bin/vecs-cli store list); do echo STORE $i; /usr/lib/vmware-vmafd/bin/vecs-cli entry list --store $i --text | egrep "Alias|Not After"; done
+
+
+if [ $deploymenttype == embedded ]
+then
+echo -e "\n\n"
+vmdirdstate="/usr/lib/vmware-vmafd/bin/dir-cli state get --login administrator --password $password"
+$vmdirdstate
+fi
+
+echo -e "\n\n---$GREEN END of script execution $NC---\n\n"

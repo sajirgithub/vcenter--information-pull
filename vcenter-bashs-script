@@ -47,7 +47,7 @@ echo -e "sca.hostid:\t\t $scahostid"
 /usr/lib/vmware-vmafd/bin/vmafd-cli get-domain-name --server-name localhost | awk '{print "SSO Domain Name:\t "$0}'
 
 ######Root Password expiry status
-rootpwd=`chage -l root | grep "Password expires" | awk '{print $4}' `
+rootpwd=`chage -l root | grep "Password expires" | awk '{print $4, $5, $6}' `
 echo -e "Root Password Expiry: \t $rootpwd"
 ######End of Root Password expiry status
 
